@@ -1,15 +1,7 @@
 #include <KellyCAN.h>
 #include <FlexCAN.h>
 #include <CANcallbacks.h>
-
-#define PEDAL_BOX_CAN_ID 150
-
-const uint8_t reverseSwBit = 0;
-const uint8_t frontSDBit = 1;
-const uint8_t rearSDBit = 2;
-const uint8_t estopBit = 3;
-const uint8_t brakeWarnBit = 4;
-const uint8_t throttleWarnBit = 5;
+#include <ChallengerEV.h>
 
 const int revPin = 26;
 const int frontSdPin = 25;
@@ -39,7 +31,7 @@ float readPot(const int *pins){
 	float Pval = (float)analogRead(pins[1])/1024.0;
   //Serial.print("Pval: ");
   //Serial.println(Pval);
-//read the other way
+  //read the other way
 	digitalWrite(pins[0], LOW);
 	digitalWrite(pins[2], HIGH);
   delay(1);
@@ -143,13 +135,15 @@ void loop() {
   if(!brakesOK) switchesVal |= 1 << brakeWarnBit;
   if(!throttleOK) switchesVal |= 1 << throttleWarnBit;
 
-
-  CAN_message_t message = {PEDAL_BOX_CAN_ID,0,3, 0, 0,0,0,0,0,0,0,0};
-  message.buf[0] = (uint8_t)(255*throttleVal);
-  message.buf[1] = (uint8_t)(255*brakeVal);
-  message.buf[2] = switchesVal;
-
-  canbus.transmit(message);
+  for(int i=2; i<nWheels; i++){
+  //for(int i=0; i<nWheels; i++){
+    
+    CAN_message_t message = {wheel[i].managerID,0,3, 0, 0,0,0,0,0,0,0,0};
+    message.buf[0] = (uint8_t)(255*throttleVal);
+    message.buf[1] = (uint8_t)(255*brakeVal);
+    message.buf[2] = switchesVal;
+    canbus.transmit(message);
+  }
 
   //Serial.println("sent");
 
