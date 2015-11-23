@@ -1,12 +1,27 @@
-#include <KellyCAN.h>
+#//include <KellyCAN.h>
 #include <FlexCAN.h>
 #include <CANcallbacks.h>
 #include <ChallengerEV.h>
 
-const int revPin = 26;
-const int frontSdPin = 25;
-const int rearSdPin = 24;
+const int revPin = 7;
+const int keyPin = 22;
 const int estopPin = 23;
+
+
+const int frontSdPin = 9;
+const int rearSdPin = 10;
+
+const int revLampPin = 24;
+
+bool EstopMode = false;
+bool reversingMode = false;
+bool revBounce = false;
+
+bool SDfront = false;
+bool SDrear = false;
+
+//bool Estop = false;
+
 
 
 FlexCAN CANbus(1000000);
@@ -15,7 +30,7 @@ FlexCAN CANbus(1000000);
 //CanBus canbus;
 
 CANcallbacks canbus(&CANbus);
-KellyCAN motor(&canbus, 107, 115);
+//KellyCAN motor(&canbus, 107, 115);
 
 const int throttlePin = 20;
 const int brakePins[6] = {19, 18, 17, 16, 15, 14};
@@ -100,6 +115,9 @@ void setup() {
   pinMode(brakePins[4], INPUT);
   pinMode(brakePins[5], OUTPUT);
   pinMode(throttlePin, INPUT);
+  pinMode(revPin, INPUT);
+  digitalWrite(revPin, HIGH);
+  
   
 }
 
@@ -114,7 +132,6 @@ typedef struct CAN_message_t {
 */
 
 void loop() {
-  delay(100);
   // put your main code here, to run repeatedly:
 
   float brakeVal;
@@ -126,20 +143,52 @@ void loop() {
   bool throttleOK = readThrottle(throttleVal);
   Serial.print("Throttle: ");
   Serial.println(throttleVal);
+  if(reversingMode) Serial.println("Reverse");
+
+  if(digitalRead(revPin) == LOW){
+    if(revBounce == false){
+      reversingMode = !reversingMode;
+      revBounce = true;
+    }
+  }else{  //pin is high
+    revBounce = false;
+  }
+
+  SDfront = (digitalRead(frontSdPin) == LOW);
+  SDrear = (digitalRead(rearSdPin) == LOW);
+
+  if(digitalRead(estopPin) == LOW){   //latch estop until reboot
+    EstopMode = true;
+  }
 
   uint8_t switchesVal = 0;
-  if(digitalRead(revPin) == HIGH) switchesVal |= 1 << reverseSwBit;
-  if(digitalRead(frontSdPin) == HIGH) switchesVal |= 1 << frontSDBit;
-  if(digitalRead(rearSdPin) == HIGH) switchesVal |= 1 << rearSDBit;
-  if(digitalRead(estopPin) == HIGH) switchesVal |= 1 << estopBit;
+  if(reversingMode) switchesVal |= 1 << reverseSwBit;
+  if(SDfront) switchesVal |= 1 << frontSDBit;
+  if(SDrear) switchesVal |= 1 << rearSDBit;
+  if(EstopMode) switchesVal |= 1 << estopBit;
   if(!brakesOK) switchesVal |= 1 << brakeWarnBit;
   if(!throttleOK) switchesVal |= 1 << throttleWarnBit;
 
-  for(int i=2; i<nWheels; i++){
-  //for(int i=0; i<nWheels; i++){
-    
+  //for(int i=2; i<nWheels; i++){
+  for(int i=0; i<nWheels; i++){
+    //load a blank message
     CAN_message_t message = {wheel[i].managerID,0,3, 0, 0,0,0,0,0,0,0,0};
-    message.buf[0] = (uint8_t)(255*throttleVal);
+
+    //don't transmit any throttle to any wheels in shutdown.
+    if(wheel[i].isFront){
+      if(SDfront || EstopMode){
+        message.buf[0] = 0;
+      }else{
+        message.buf[0] = (uint8_t)(255*throttleVal);
+      }
+    }else{
+      if(SDrear || EstopMode){
+        message.buf[0] = 0;
+      }else{
+        message.buf[0] = (uint8_t)(255*throttleVal);
+      }
+    }
+    
     message.buf[1] = (uint8_t)(255*brakeVal);
     message.buf[2] = switchesVal;
     canbus.transmit(message);
@@ -147,4 +196,5 @@ void loop() {
 
   //Serial.println("sent");
 
+  delay(20); //replace with a real frequency
 }
