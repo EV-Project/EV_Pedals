@@ -3,9 +3,9 @@
 #include <CANcallbacks.h>
 #include <ChallengerEV.h>
 
-const int revPin = 7;
-const int keyPin = 22;
-const int estopPin = 23;
+const int revPins[] = {14, 8, 16};
+const int keyPins[] = {14, 9, 16};
+const int estopPins[] = {14, 7, 16};
 
 
 const int frontSdPin = 9;
@@ -16,6 +16,8 @@ const int revLampPin = 24;
 bool EstopMode = false;
 bool reversingMode = false;
 bool revBounce = false;
+bool keyState = false;
+
 
 bool SDfront = false;
 bool SDrear = false;
@@ -33,7 +35,8 @@ CANcallbacks canbus(&CANbus);
 //KellyCAN motor(&canbus, 107, 115);
 
 const int throttlePin = 20;
-const int brakePins[6] = {19, 18, 17, 16, 15, 14};
+const int brakePins[6] = {14, 15, 16, 14, 17, 16};
+
 float brakeMax = 0.9;
 float brakeMin = 0.1;
 float brakeTolerance = 0.05;
@@ -60,6 +63,24 @@ float readPot(const int *pins){
 	if(Nval>brakeMax) return -1;
 	if(abs(Pval + Nval - 1.0)>brakeTolerance) return -1;
 	return (((Pval+(1.0-Nval))/2.0) - brakeMin)*(1/(brakeMax-brakeMin));
+}
+
+bool readSwitch(const int *pins, bool &buttonState){
+  digitalWrite(pins[0], LOW);
+  digitalWrite(pins[2], HIGH);
+    delay(1);
+  buttonState = digitalRead(pins[1]);
+  digitalWrite(pins[0], HIGH);
+  digitalWrite(pins[2], LOW);
+    delay(1);
+  bool buttonCheck = digitalRead(pins[1]);
+
+  if(buttonState == buttonCheck){
+    return false;
+  }else{
+    return true;
+  }
+  
 }
 
 bool readThrottle(float &throttleVal){
@@ -96,6 +117,9 @@ bool readBrakes(float &brakeVal){
   }
 }
 
+
+
+
 void setup() {
   Serial.begin(9600);
 
@@ -114,11 +138,12 @@ void setup() {
   pinMode(brakePins[3], OUTPUT);
   pinMode(brakePins[4], INPUT);
   pinMode(brakePins[5], OUTPUT);
+  
   pinMode(throttlePin, INPUT);
-  pinMode(revPin, INPUT);
-  digitalWrite(revPin, HIGH);
   
-  
+  pinMode(revPins[1], INPUT);
+  pinMode(keyPins[1], INPUT);
+  pinMode(estopPins[1], INPUT);
 }
 
 /*
@@ -143,9 +168,25 @@ void loop() {
   bool throttleOK = readThrottle(throttleVal);
   Serial.print("Throttle: ");
   Serial.println(throttleVal);
+  Serial.print("Brakes: ");
+  Serial.print(brakeVal);
+  if(brakesOK){
+    Serial.println(" OK");
+  }else {Serial.println(" Bad");
+  }
   if(reversingMode) Serial.println("Reverse");
+  if(EstopMode) Serial.println("E-Stop");
+  if(!keyState) Serial.println("Powered Down");
 
-  if(digitalRead(revPin) == LOW){
+  bool revSwState = false;
+  bool keySwState = false;
+  bool estopSwState = false;
+  if(!readSwitch(revPins, revSwState)) Serial.println("Switch Error  ******************************");
+  if(!readSwitch(keyPins, keySwState)) Serial.println("Switch Error  ******************************");
+  if(!readSwitch(estopPins, estopSwState)) Serial.println("Switch Error  ******************************");
+
+
+  if(revSwState){   //one-shot 
     if(revBounce == false){
       reversingMode = !reversingMode;
       revBounce = true;
@@ -154,12 +195,27 @@ void loop() {
     revBounce = false;
   }
 
-  SDfront = (digitalRead(frontSdPin) == LOW);
-  SDrear = (digitalRead(rearSdPin) == LOW);
+//  SDfront = (digitalRead(frontSdPin) == LOW);
+//  SDrear = (digitalRead(rearSdPin) == LOW);
 
-  if(digitalRead(estopPin) == LOW){   //latch estop until reboot
+  if(estopSwState){   //latch estop until key reset
     EstopMode = true;
   }
+  
+  if(keyState != keySwState){
+    if(keySwState){   //Power Up
+      keyState = keySwState;
+    }else{  //Power Down
+      keyState = keySwState;
+      reversingMode = false;
+      SDfront = true;
+      SDrear = true;
+      EstopMode = false;
+    }
+  }
+  
+
+
 
   uint8_t switchesVal = 0;
   if(reversingMode) switchesVal |= 1 << reverseSwBit;
