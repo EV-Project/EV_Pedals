@@ -80,8 +80,8 @@ bool readSwitch(const int *pins, bool &buttonState){
   }else{
     return true;
   }
-  
 }
+
 
 bool readThrottle(float &throttleVal){
   int raw = analogRead(throttlePin)-100;
@@ -89,6 +89,7 @@ bool readThrottle(float &throttleVal){
   throttleVal = (float)raw/(float)(1024-100);
   return true;
 }
+
 /**
  * Read both pots on the brake pedal, output in the reference brakeVal
  * Returns: true if the pots are working fine, false if only one pot is OK.
@@ -117,6 +118,12 @@ bool readBrakes(float &brakeVal){
   }
 }
 
+void setEstop(){
+  EstopMode = true;
+}
+void clearEstop(){
+  EstopMode = false;
+}
 
 
 
@@ -172,7 +179,8 @@ void loop() {
   Serial.print(brakeVal);
   if(brakesOK){
     Serial.println(" OK");
-  }else {Serial.println(" Bad");
+  }else {
+    Serial.println(" Bad");
   }
   if(reversingMode) Serial.println("Reverse");
   if(EstopMode) Serial.println("E-Stop");
@@ -199,18 +207,20 @@ void loop() {
 //  SDrear = (digitalRead(rearSdPin) == LOW);
 
   if(estopSwState){   //latch estop until key reset
-    EstopMode = true;
+    setEstop();
   }
   
   if(keyState != keySwState){
     if(keySwState){   //Power Up
       keyState = keySwState;
+      SDfront = false;
+      SDrear = false;
     }else{  //Power Down
       keyState = keySwState;
       reversingMode = false;
       SDfront = true;
       SDrear = true;
-      EstopMode = false;
+      clearEstop();
     }
   }
   
