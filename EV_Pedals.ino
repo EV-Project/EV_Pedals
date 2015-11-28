@@ -168,11 +168,18 @@ void loop() {
 
   float brakeVal;
   bool brakesOK = readBrakes(brakeVal);
+  if(!brakesOK) {
+    brakeVal = 0;
+  };
   //Serial.print("Brakes: ");
   //Serial.println(brakeVal);
   
   float throttleVal;
   bool throttleOK = readThrottle(throttleVal);
+  if(!throttleOK) {
+    throttleVal = 0;
+  };
+
   Serial.print("Throttle: ");
   Serial.println(throttleVal);
   Serial.print("Brakes: ");
@@ -194,7 +201,7 @@ void loop() {
   if(!readSwitch(estopPins, estopSwState)) Serial.println("Switch Error  ******************************");
 
 
-  if(revSwState){   //one-shot 
+  if(revSwState){   //one-shot trigger
     if(revBounce == false){
       reversingMode = !reversingMode;
       revBounce = true;
