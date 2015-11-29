@@ -25,7 +25,6 @@ bool SDrear = false;
 //bool Estop = false;
 
 
-
 FlexCAN CANbus(1000000);
 
 //static CAN_message_t msg,rxmsg;
@@ -168,7 +167,7 @@ void loop() {
 
   float brakeVal;
   bool brakesOK = readBrakes(brakeVal);
-  if(!brakesOK) {
+  if(brakeVal == -1) {
     brakeVal = 0;
   };
   //Serial.print("Brakes: ");
@@ -176,7 +175,7 @@ void loop() {
   
   float throttleVal;
   bool throttleOK = readThrottle(throttleVal);
-  if(!throttleOK) {
+  if(throttleVal == -1) {
     throttleVal = 0;
   };
 
