@@ -36,9 +36,16 @@ CANcallbacks canbus(&CANbus);
 const int throttlePin = 20;
 const int brakePins[6] = {14, 15, 16, 14, 17, 16};
 
-float brakeMax = 0.9;
-float brakeMin = 0.1;
-float brakeTolerance = 0.05;
+//max and min defined for fault conditions
+float brakeMax = 0.9;   //positive cable disconnect
+float brakeMin = 0.1;   //negative cable disconnect
+float brakeTolerance = 0.05;  //wiper disconnect
+
+//max and min for general use
+float brakeTop = 0.4; //idle position
+float brakeBottom = 0.8;  //full range
+float brakeMech = 0.6;  //when the calipers touch the disks.
+
 
 float readPot(const int *pins){
 //read one way
@@ -90,32 +97,50 @@ bool readThrottle(float &throttleVal){
 }
 
 /**
- * Read both pots on the brake pedal, output in the reference brakeVal
+ * Read both pots, output in the reference rawVal
  * Returns: true if the pots are working fine, false if only one pot is OK.
  * if both pots check ok but still don't agree, return pot A.
+ * if both pots are dead, return -1.
 **/
-bool readBrakes(float &brakeVal){
+bool combinePots(float &rawVal){
 	float potA = readPot(brakePins);
 	float potB = readPot(&brakePins[3]);
   if((potA == -1)&&(potB == -1)){
-    brakeVal =  -1;
+    rawVal =  -1;
     return false;
   }else if(potA == -1){
-    brakeVal = potB;
+    rawVal = potB;
     return false;
   }else if(potB == -1){
-    brakeVal = potA;
+    rawVal = potA;
     return false;
   }else{
     if(abs(potA-potB)<brakeTolerance){
-      brakeVal = (potA+potB)/2;
+      rawVal = (potA+potB)/2;
       return true;
     }else{
-      brakeVal = potA;
+      rawVal = potA;
       return false;
     }
   }
 }
+
+bool readBrakes(float &brakeVal){
+  float rawVal;
+  bool potsOk = combinePots(rawVal);
+  //Serial.print("Brakes Raw: ");
+  //Serial.println(rawVal);
+  if(rawVal==-1){   //pass on the error
+    brakeVal = rawVal;
+    return potsOk;
+  }
+  //brakeVal = map(rawVal, brakeTop, brakeBottom, 0.0, 1.0);  //map is integers only
+  brakeVal = (rawVal - brakeTop)/ (brakeBottom - brakeTop);
+  if(brakeVal < 0.0) brakeVal = 0.0; //clamp the values
+  if(brakeVal > 1.0) brakeVal = 1.0;
+  return potsOk;
+}
+
 
 void setEstop(){
   EstopMode = true;
@@ -167,11 +192,12 @@ void loop() {
 
   float brakeVal;
   bool brakesOK = readBrakes(brakeVal);
+  //Serial.print("Brakes: ");
+  //Serial.println(brakeVal);
+  
   if(brakeVal == -1) {
     brakeVal = 0;
   };
-  //Serial.print("Brakes: ");
-  //Serial.println(brakeVal);
   
   float throttleVal;
   bool throttleOK = readThrottle(throttleVal);
